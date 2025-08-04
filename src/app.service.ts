@@ -51,11 +51,24 @@ export class AppService {
 
   private async sendTelegramMessage(text: string) {
     const telegramUrl = `https://api.telegram.org/bot${this.telegramBotToken}/sendMessage`;
-    await fetch(telegramUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: this.telegramChatId, text }),
-    });
+    try {
+      const response = await fetch(telegramUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: this.telegramChatId, text }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error(
+          `❌ Telegram error: ${response.status} - ${errorText}`,
+        );
+      } else {
+        this.logger.log('📬 Telegram message sent successfully');
+      }
+    } catch (error) {
+      this.logger.error('❌ Telegram fetch failed', error);
+    }
   }
 
   private async scrapeQuotes(url: string, redisKey: string, tag = '') {
@@ -78,7 +91,10 @@ export class AppService {
       const alreadySeen = await this.redis.sismember(redisKey, quote.url);
       if (!alreadySeen) {
         await this.redis.sadd(redisKey, quote.url);
+
         const msg = `${tag}${quote.title}\n${quote.price}\n${quote.date}\n${quote.url}`;
+        this.logger.log(`🆕 New listing found:\n${msg}`);
+
         await this.sendTelegramMessage(msg);
       }
     }
