@@ -71,34 +71,43 @@ export class AppService {
     }
   }
 
-    private async scrapeQuotes(url: string, redisKey: string, tag = '') {
-      const res = await fetch(url);
-      const html = await res.text();
-      const $ = cheerio.load(html);
-      const newQuotes: any[] = [];
+  private async scrapeQuotes(url: string, redisKey: string, tag = '') {
+    const res = await fetch(url);
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const newQuotes: any[] = [];
 
-      $('div[data-testid="listing-grid"] div[data-cy="l-card"]').each((_, el) => {
-        const title = $(el).find('h4').text();
-        const price = $(el).find('p[data-testid="ad-price"]').text();
-        const href = $(el).find('a').attr('href');
-        const date = $(el).find('p[data-testid="location-date"]').text();
-        const fullUrl = 'https://www.olx.ua' + href;
+    $('div[data-testid="listing-grid"] div[data-cy="l-card"]').each((_, el) => {
+      const title = $(el).find('h4').text();
+      const price = $(el).find('p[data-testid="ad-price"]').text();
+      const href = $(el).find('a').attr('href');
+      const date = $(el).find('p[data-testid="location-date"]').text();
+      const fullUrl = 'https://www.olx.ua' + href;
 
-        newQuotes.push({ title, price, date, url: fullUrl });
-      });
+      newQuotes.push({ title, price, date, url: fullUrl });
+    });
 
-      for (const quote of newQuotes) {
-        const alreadySeen = await this.redis.sismember(redisKey, quote.url);
-        if (!alreadySeen) {
-          await this.redis.sadd(redisKey, quote.url);
+    const seenUrls = new Set(await this.redis.smembers(redisKey));
+    const newUrlsToAdd: string[] = [];
 
-          const msg = `${tag}${quote.title}\n${quote.price}\n${quote.date}\n${quote.url}`;
-          this.logger.log(`🆕 New listing found:\n${msg}`);
+    for (const quote of newQuotes) {
+      if (!seenUrls.has(quote.url)) {
+        newUrlsToAdd.push(quote.url);
 
-          await this.sendTelegramMessage(msg);
-        }
+        const msg = `${tag}${quote.title}\n${quote.price}\n${quote.date}\n${quote.url}`;
+        this.logger.log(`🆕 New listing found:\n${msg}`);
+
+        await this.sendTelegramMessage(msg);
       }
     }
+
+    if (newUrlsToAdd.length > 0) {
+      await this.redis.sadd(
+        redisKey,
+        ...(newUrlsToAdd as [string, ...string[]]),
+      );
+    }
+  }
 
   public getHello(): string {
     return '✅ NestJS scraper is running';
