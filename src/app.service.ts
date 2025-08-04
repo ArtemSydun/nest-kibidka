@@ -29,7 +29,7 @@ export class AppService {
     });
   }
 
-  @Cron('*/8 * * * *')
+  @Cron('*/5 * * * *')
   async handleCron() {
     this.logger.log('⏰ Running cron scrape...');
     await this.scrape();
