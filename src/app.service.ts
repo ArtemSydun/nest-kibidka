@@ -37,12 +37,16 @@ export class AppService {
 
   public async scrape() {
     try {
-      await this.scrapeQuotes(this.regularUrl, 'seen_regular');
+      // 1. Scrape tax-free first, with tag
       await this.scrapeQuotes(
         this.taxFreeUrl,
-        'seen_taxfree',
+        'seen_regular',
         '‼️ БЕЗ КОМІСІЇ ‼️\n',
       );
+
+      // 2. Then scrape regular, without tag
+      await this.scrapeQuotes(this.regularUrl, 'seen_regular');
+
       this.logger.log('✅ Scraping complete');
     } catch (error) {
       this.logger.error('❌ Scraping failed', error);
@@ -82,6 +86,10 @@ export class AppService {
       const price = $(el).find('p[data-testid="ad-price"]').text();
       const href = $(el).find('a').attr('href');
       const date = $(el).find('p[data-testid="location-date"]').text();
+
+      // Only listings with "Луцьк"
+      if (!date.includes('Луцьк')) return;
+
       const fullUrl = 'https://www.olx.ua' + href;
 
       newQuotes.push({ title, price, date, url: fullUrl });
